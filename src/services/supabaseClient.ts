@@ -1,0 +1,1 @@
+// Inisialisasi koneksi klien Supabase menggunakan URL dan Anon Key proyek.
