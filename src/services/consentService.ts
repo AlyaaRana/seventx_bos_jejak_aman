@@ -15,6 +15,7 @@ export async function requestConsentOtp(params: {
   responderId: string;
   duration: '24h' | '7d';
 }): Promise<OtpRequestResult> {
+  void params;
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve({

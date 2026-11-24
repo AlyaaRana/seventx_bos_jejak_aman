@@ -9,8 +9,7 @@ export type ScreenRoute =
   | 's06c-write-note'
   | 's07-offline-queue'
   | 's08-evidence-history'
-  | 's09-responder-verify'
-  | 's09a-responder-method'
+  | 's09-responder-welcome'
   | 's09b-responder-nfc'
   | 's09c-responder-ocr'
   | 's10-find-responder'
@@ -19,7 +18,6 @@ export type ScreenRoute =
   | 's13-responder-otp'
   | 's14-consent-granted'
   | 's15-responder-dashboard'
-  | 's15-case-reviewer'
   | 's16-evidence-review'
   | 's18-help-center'
   | 's19-settings';

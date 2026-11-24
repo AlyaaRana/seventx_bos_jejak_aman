@@ -1,0 +1,32 @@
+/* Animasi alur pendamping. Halus dan pendek; berhenti jika perangkat meminta "kurangi gerakan". */
+
+@keyframes rp-ring {
+  0% { transform: scale(0.6); opacity: 0.55; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes rp-scan {
+  0%, 100% { top: 10%; }
+  50% { top: 88%; }
+}
+
+@keyframes rp-reveal {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes rp-caret {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.rp-ring { animation: rp-ring 3s ease-out infinite; }
+.rp-scan { animation: rp-scan 2.2s ease-in-out infinite; }
+.rp-reveal { animation: rp-reveal 0.45s ease-out both; }
+.rp-caret { animation: rp-caret 1s steps(1) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rp-ring, .rp-scan, .rp-reveal, .rp-caret {
+    animation: none !important;
+  }
+}

@@ -19,7 +19,7 @@ import { AccessHistoryScreen } from './features/consent-access/AccessHistoryScre
 import { ShareConsentScreen } from './features/consent-access/ShareConsentScreen';
 import { ConsentGrantedScreen } from './features/consent-access/ConsentGrantedScreen';
 
-import { ResponderVerifyMethodScreen } from './features/responder/ResponderVerifyMethodScreen';
+import { ResponderWelcomeScreen } from './features/responder/ResponderWelcomeScreen';
 import { ResponderNfcScanScreen } from './features/responder/ResponderNfcScanScreen';
 import { ResponderOcrScanScreen } from './features/responder/ResponderOcrScanScreen';
 import { ResponderOtpConfirmScreen } from './features/responder/ResponderOtpConfirmScreen';
@@ -31,13 +31,11 @@ import { SettingsScreen } from './features/settings/SettingsScreen';
 import { QuickExitFAB } from './components/shared/QuickExitFAB';
 
 const RESPONDER_ROUTES: ScreenRoute[] = [
-  's09-responder-verify',
-  's09a-responder-method',
+  's09-responder-welcome',
   's09b-responder-nfc',
   's09c-responder-ocr',
   's13-responder-otp',
   's15-responder-dashboard',
-  's15-case-reviewer',
   's16-evidence-review',
 ];
 
@@ -68,9 +66,8 @@ export const App: React.FC = () => {
         return <OfflineQueueScreen />;
       case 's08-evidence-history':
         return <EvidenceHistoryScreen />;
-      case 's09-responder-verify':
-      case 's09a-responder-method':
-        return <ResponderVerifyMethodScreen />;
+      case 's09-responder-welcome':
+        return <ResponderWelcomeScreen />;
       case 's09b-responder-nfc':
         return <ResponderNfcScanScreen />;
       case 's09c-responder-ocr':
@@ -86,7 +83,6 @@ export const App: React.FC = () => {
       case 's14-consent-granted':
         return <ConsentGrantedScreen />;
       case 's15-responder-dashboard':
-      case 's15-case-reviewer':
         return <ResponderDashboardScreen />;
       case 's16-evidence-review':
         return <ResponderEvidenceReviewScreen />;
@@ -100,12 +96,7 @@ export const App: React.FC = () => {
   };
 
   if (RESPONDER_ROUTES.includes(screen)) {
-    return (
-      <>
-        {renderScreen()}
-        <QuickExitFAB />
-      </>
-    );
+    return renderScreen();
   }
 
   if (!hasSetupPin) {

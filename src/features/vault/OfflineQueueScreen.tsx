@@ -1,12 +1,49 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useVaultStore } from '../../store/useVaultStore';
 import { MobileContainer } from '../../components/layout/MobileContainer';
 import { BottomNavbar } from '../../components/shared/BottomNavbar';
-import { ArrowLeft, LogOut, WifiOff, RefreshCw, CheckCircle2, Clock } from 'lucide-react';
+import { ChevronLeft, WifiOff, RefreshCw, CheckCircle2, Clock } from 'lucide-react';
+import { vaultApi } from './vaultApi';
+import type { SyncQueueItem } from './vaultApi';
 
 export const OfflineQueueScreen: React.FC = () => {
   const { setScreen } = useVaultStore();
   const [wifiOnly, setWifiOnly] = useState(true);
+  const [queue, setQueue] = useState<SyncQueueItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isActive = true;
+    void vaultApi
+      .listSyncQueue()
+      .then((items) => {
+        if (isActive) setQueue(items);
+      })
+      .catch((error: unknown) => {
+        if (isActive) setErrorMessage(error instanceof Error ? error.message : 'Antrean gagal dimuat.');
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const retrySync = async () => {
+    setIsSyncing(true);
+    setErrorMessage(null);
+    try {
+      const result = await vaultApi.retrySyncQueue(wifiOnly);
+      setQueue(result.items);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Sinkronisasi demo gagal.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   return (
     <MobileContainer className="bg-[#FAF8FF] text-slate-800 flex flex-col justify-between">
@@ -17,19 +54,14 @@ export const OfflineQueueScreen: React.FC = () => {
             onClick={() => setScreen('s04-vault-home')}
             className="w-9 h-9 rounded-full bg-white border border-slate-100 flex items-center justify-center text-slate-600 shadow-xs"
           >
-            <ArrowLeft size={18} />
+            <ChevronLeft size={18} />
           </button>
           <div>
-            <p className="text-[10px] text-slate-400 font-bold">Status sinkron</p>
-            <h1 className="text-sm font-extrabold text-slate-900">Antrean bukti</h1>
+            <p className="text-[10px] font-bold text-emerald-700 leading-tight">Status sinkron</p>
+            <h1 className="text-base font-extrabold text-slate-900 leading-tight flex items-center gap-1.5">Antrean bukti</h1>
           </div>
         </div>
-        <button
-          onClick={() => setScreen('s03-calculator')}
-          className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center"
-        >
-          <LogOut size={16} />
-        </button>
+        
       </div>
 
       {/* Main Content */}
@@ -42,59 +74,47 @@ export const OfflineQueueScreen: React.FC = () => {
           <div className="text-left">
             <p className="text-xs font-bold text-amber-950">Sinyal belum ada. Tidak apa-apa.</p>
             <p className="text-[10px] text-amber-800 leading-tight">
-              Buktimu tetap terkunci aman di ponsel dan akan terkirim sendiri[cite: 18, 26].
+              Mode demo: status antrean berubah lokal dan belum mengirim berkas ke server.
             </p>
           </div>
         </div>
 
         {/* Queue Items */}
+        {errorMessage && <p role="alert" className="text-xs font-semibold text-rose-700">{errorMessage}</p>}
         <div className="space-y-2.5">
-          {/* Item 1 */}
-          <div className="bg-white p-3.5 rounded-2xl border border-slate-100 flex items-center justify-between shadow-xs">
-            <div className="flex items-center gap-3">
-              <span className="text-lg">📷</span>
-              <div>
-                <p className="text-xs font-bold text-slate-900">Foto bukti #03</p>
-                <p className="text-[10px] text-slate-400">Terkunci di HP · menung</p>
-              </div>
-            </div>
-            <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-              <Clock size={11} /> Menunggu
-            </span>
-          </div>
-
-          {/* Item 2 */}
-          <div className="bg-white p-3.5 rounded-2xl border border-slate-100 space-y-2 shadow-xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-lg">🎙️</span>
-                <div>
-                  <p className="text-xs font-bold text-slate-900">Rekaman suara #0</p>
-                  <p className="text-[10px] text-slate-400">Mengunggah 64%</p>
+          {isLoading ? (
+            <p className="text-center text-xs text-slate-500">Memuat antrean demo...</p>
+          ) : queue.length ? (
+            queue.map((item) => (
+              <div key={item.evidenceId} className="space-y-2 rounded-2xl border border-slate-100 bg-white p-3.5 shadow-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">{item.title}</p>
+                    <p className="text-[10px] text-slate-400">ID bukti: {item.evidenceId}</p>
+                  </div>
+                  <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                    item.status === 'synced'
+                      ? 'bg-[#DCFCE7] text-[#047857]'
+                      : item.status === 'uploading'
+                        ? 'bg-purple-100 text-purple-800'
+                        : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {item.status === 'synced' ? <CheckCircle2 size={11} /> : <Clock size={11} />}
+                    {item.status === 'synced' ? 'Tersinkron · demo' : item.status === 'uploading' ? `Mengunggah ${item.progress}%` : 'Menunggu'}
+                  </span>
                 </div>
+                {item.status === 'uploading' && (
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full rounded-full bg-[#FF6B50]" style={{ width: `${item.progress}%` }} />
+                  </div>
+                )}
               </div>
-              <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-2.5 py-1 rounded-full">
-                Mengunggah
-              </span>
-            </div>
-            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <div className="w-[64%] h-full bg-[#FF6B50] rounded-full" />
-            </div>
-          </div>
-
-          {/* Item 3 */}
-          <div className="bg-white p-3.5 rounded-2xl border border-slate-100 flex items-center justify-between shadow-xs">
-            <div className="flex items-center gap-3">
-              <span className="text-lg">📄</span>
-              <div>
-                <p className="text-xs font-bold text-slate-900">Catatan #01</p>
-                <p className="text-[10px] text-slate-400">Terkunci di server · 21.16</p>
-              </div>
-            </div>
-            <span className="bg-[#DCFCE7] text-[#047857] text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-              <CheckCircle2 size={11} /> Utuh
-            </span>
-          </div>
+            ))
+          ) : (
+            <p className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-center text-xs text-slate-500">
+              Antrean kosong.
+            </p>
+          )}
         </div>
 
         {/* Note Box */}
@@ -119,9 +139,14 @@ export const OfflineQueueScreen: React.FC = () => {
         </div>
 
         {/* Action Button */}
-        <button className="w-full h-12 rounded-2xl bg-[#FF6B50] text-white font-bold text-sm shadow-xs flex items-center justify-center gap-2 active:scale-95 transition-all">
+        <button
+          type="button"
+          disabled={isLoading || isSyncing || queue.length === 0}
+          onClick={() => void retrySync()}
+          className="w-full h-12 rounded-2xl bg-[#FF6B50] text-white font-bold text-sm shadow-xs flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+        >
           <RefreshCw size={16} />
-          <span>Coba kirim sekarang</span>
+          <span>{isSyncing ? 'Menyinkronkan demo...' : 'Coba kirim sekarang'}</span>
         </button>
       </div>
 

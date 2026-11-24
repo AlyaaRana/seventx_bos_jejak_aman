@@ -6,7 +6,7 @@ import { MobileContainer } from '../../components/layout/MobileContainer';
 export const CalculatorDisguise: React.FC = () => {
   const [display, setDisplay] = useState('0');
   const [expression, setExpression] = useState('');
-  const { unlockVaultWithPIN, setScreen } = useVaultStore();
+  const { unlockVaultWithPIN, setRole } = useVaultStore();
 
   const handleInput = (val: string) => {
     if (val === 'AC') {
@@ -55,7 +55,7 @@ export const CalculatorDisguise: React.FC = () => {
       <div className="flex justify-between items-center text-xs text-slate-500 mb-auto pt-2">
         <span>Kalkulator</span>
         <button 
-          onClick={() => setScreen('s09-responder-verify')}
+          onClick={() => setRole('responder')}
           className="text-slate-400 hover:text-slate-200 underline"
         >
           Portal Pendamping

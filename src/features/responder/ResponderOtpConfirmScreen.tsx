@@ -1,126 +1,241 @@
-// Layar S13 Langkah 3/3: Konfirmasi kode OTP 6-digit sebelum membuka dashboard pendamping.
-import React, { useState } from 'react';
+// Layar langkah 3/3: Simulasi konfirmasi OTP sebelum membuka dashboard pendamping.
+import React, { useCallback, useEffect, useState } from 'react';
+import { Delete, Mail, ShieldCheck } from 'lucide-react';
 import { useVaultStore } from '../../store/useVaultStore';
-import { MobileContainer } from '../../components/layout/MobileContainer';
-import { ArrowLeft, LogOut, ShieldCheck, Delete } from 'lucide-react';
+import { ACCESS_GRANT, ROUTES } from './responderData';
+import { responderApi } from './responderApi';
+import { ResponderStepHeader } from './ResponderStepHeader';
+import { Button, Card, Pill, ResponderScreen } from './ResponderUi';
+import { cx } from './responderUtils';
+import './responder-animations.css';
+
+const OTP_LENGTH = 6;
+const RESEND_SECONDS = 42;
+const KEYPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
+
+type KeyTone = 'digit' | 'action';
+
+const KEY_TONES: Record<KeyTone, string> = {
+  digit: 'border border-purple-100 bg-white text-slate-800 shadow-sm',
+  action: 'bg-purple-50 text-purple-700',
+};
+
+const formatCountdown = (totalSeconds: number): string =>
+  `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
+
+function getBoxTone(isFilled: boolean, isCurrent: boolean): string {
+  if (isFilled) return 'border-emerald-400 bg-emerald-50 text-slate-900';
+  if (isCurrent) return 'border-[#3048D9] bg-white shadow-[0_0_0_4px_rgba(48,72,217,0.12)]';
+  return 'border-purple-100 bg-white';
+}
+
+interface KeypadKeyProps {
+  children: React.ReactNode;
+  onClick: () => void;
+  tone?: KeyTone;
+  label?: string;
+}
+
+const KeypadKey: React.FC<KeypadKeyProps> = ({ children, onClick, tone = 'digit', label }) => (
+  <button
+    type="button"
+    aria-label={label}
+    onClick={onClick}
+    className={cx(
+      'flex h-12 items-center justify-center rounded-2xl text-lg font-bold transition-all active:scale-95',
+      KEY_TONES[tone],
+    )}
+  >
+    {children}
+  </button>
+);
 
 export const ResponderOtpConfirmScreen: React.FC = () => {
-  const { setScreen } = useVaultStore();
-  const [otp, setOtp] = useState('482');
+  const { setScreen, responderFlowSession, updateResponderFlowSession } = useVaultStore();
+  const { identity, otpChallenge } = responderFlowSession;
+  const [otp, setOtp] = useState('');
+  const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
+  const [isRequesting, setIsRequesting] = useState(Boolean(identity && !otpChallenge));
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isOtpComplete = otp.length === OTP_LENGTH;
 
-  const handleDigit = (d: string) => {
-    if (otp.length < 6) setOtp((prev) => prev + d);
+  const appendDigit = useCallback((digit: string) => setOtp((prev) => (prev.length < OTP_LENGTH ? prev + digit : prev)), []);
+  const removeLastDigit = useCallback(() => setOtp((prev) => prev.slice(0, -1)), []);
+  const clearOtp = () => setOtp('');
+
+  const requestOtp = useCallback(async () => {
+    if (!identity) {
+      setErrorMessage('Data identitas belum tersedia. Ulangi pemindaian e-KTP.');
+      return;
+    }
+
+    setIsRequesting(true);
+    setErrorMessage(null);
+    try {
+      const challenge = await responderApi.requestConsentOtp({
+        responderId: identity.responderId,
+        caseId: identity.caseId,
+        duration: '7d',
+      });
+      updateResponderFlowSession({ otpChallenge: challenge });
+      setSecondsLeft(RESEND_SECONDS);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Tidak dapat menyiapkan OTP demo.');
+    } finally {
+      setIsRequesting(false);
+    }
+  }, [identity, updateResponderFlowSession]);
+
+  useEffect(() => {
+    if (!identity || otpChallenge) return;
+    let isActive = true;
+
+    void responderApi
+      .requestConsentOtp({
+        responderId: identity.responderId,
+        caseId: identity.caseId,
+        duration: '7d',
+      })
+      .then((challenge) => {
+        if (!isActive) return;
+        updateResponderFlowSession({ otpChallenge: challenge });
+        setSecondsLeft(RESEND_SECONDS);
+      })
+      .catch((error: unknown) => {
+        if (isActive) setErrorMessage(error instanceof Error ? error.message : 'Tidak dapat menyiapkan OTP demo.');
+      })
+      .finally(() => {
+        if (isActive) setIsRequesting(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [identity, otpChallenge, updateResponderFlowSession]);
+
+  const resendCode = async () => {
+    setOtp('');
+    await requestOtp();
   };
 
-  const handleBack = () => {
-    setOtp((prev) => prev.slice(0, -1));
+  useEffect(() => {
+    if (!otpChallenge || secondsLeft === 0) return;
+    const timer = window.setTimeout(() => setSecondsLeft((seconds) => seconds - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [otpChallenge, secondsLeft]);
+
+  // Papan ketik fisik ikut bekerja (berguna saat demo di desktop).
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (/^[0-9]$/.test(event.key)) appendDigit(event.key);
+      else if (event.key === 'Backspace') removeLastDigit();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [appendDigit, removeLastDigit]);
+
+  const grantSummary = [ACCESS_GRANT.durationLabel, ACCESS_GRANT.modeLabel].join(' · ');
+  const displayError = errorMessage ?? (!identity ? 'Data identitas belum tersedia. Ulangi pemindaian e-KTP.' : null);
+
+  const verifyOtp = async () => {
+    if (!identity || !otpChallenge || !isOtpComplete) return;
+    setIsVerifying(true);
+    setErrorMessage(null);
+    try {
+      const grant = await responderApi.verifyConsentOtp({
+        challengeId: otpChallenge.challengeId,
+        otpCode: otp,
+        responderId: identity.responderId,
+        duration: '7d',
+      });
+      updateResponderFlowSession({ grant });
+      setScreen(ROUTES.dashboard);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Verifikasi OTP demo gagal.');
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   return (
-    <MobileContainer className="relative bg-[#FAF8FF] text-slate-800 p-5 flex flex-col justify-between overflow-hidden font-sans">
-      {/* Top Bar */}
-      <div className="flex items-center justify-between pt-1">
-        <button
-          type="button"
-          onClick={() => setScreen('s09b-responder-nfc')}
-          className="w-9 h-9 rounded-full bg-white border border-purple-100 flex items-center justify-center text-slate-700 shadow-xs"
-        >
-          <ArrowLeft size={16} />
-        </button>
+    <ResponderScreen>
+      <ResponderStepHeader step={3} title="Konfirmasi Izin" backTarget={ROUTES.ocr} />
 
-        <span className="text-[10px] font-extrabold text-[#7E22CE] bg-[#F3E8FF] px-3 py-1 rounded-full">
-          Langkah 3 dari 3
+      <Card className="flex items-center gap-3 py-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+          <ShieldCheck size={21} strokeWidth={1.9} />
         </span>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-[15px] font-extrabold text-slate-900">{identity?.institution ?? 'Pendamping'}</h1>
+          <p className="text-[12px] text-slate-500">{grantSummary}</p>
+        </div>
+        <Pill tone="success">Konfirmasi izin</Pill>
+      </Card>
 
-        <button
-          type="button"
-          onClick={() => setScreen('s03-calculator')}
-          aria-label="Keluar Cepat"
-          className="w-9 h-9 rounded-full bg-[#FFEDD5] text-[#D97706] flex items-center justify-center shadow-xs"
-        >
-          <LogOut size={16} />
-        </button>
-      </div>
-
-      {/* Institution Info Card */}
-      <div className="bg-white border border-purple-100 rounded-2xl p-3.5 text-left space-y-1 shadow-xs mt-3">
-        <span className="text-[10px] font-extrabold text-emerald-700 bg-[#DCFCE7] px-2.5 py-0.5 rounded-full inline-block">
-          Konfirmasi izin
+      <section className="flex flex-1 flex-col items-center justify-center gap-2 py-1 text-center">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-50 text-purple-700">
+          <Mail size={22} strokeWidth={1.8} />
         </span>
-        <h1 className="text-sm font-extrabold text-slate-900 pt-1">LBH Harapan Bersama</h1>
-        <p className="text-[11px] text-slate-400">7 hari · hanya lihat · 3 bukti</p>
-      </div>
-
-      {/* OTP Input & Countdown */}
-      <div className="text-center space-y-2 my-auto py-2">
-        <h2 className="text-base font-extrabold text-slate-900">Cek emailmu</h2>
-        <p className="text-[11px] text-slate-500 max-w-[240px] mx-auto leading-relaxed">
-          Kode 6 digit dikirim ke email pemulihan <strong className="text-slate-700">a***@mail.com</strong>. Berlaku 5 menit.
+        <h2 className="text-lg font-extrabold text-slate-900">{isRequesting ? 'Menyiapkan OTP demo...' : 'Masukkan OTP demo'}</h2>
+        <p className="max-w-[270px] text-[13px] leading-relaxed text-slate-600">
+          Backend email belum terhubung. Masukkan 6 digit angka apa saja untuk melanjutkan simulasi.
         </p>
+        <span className="rounded-full bg-purple-50 px-3 py-1 text-[13px] font-bold text-purple-800">
+          {otpChallenge?.maskedEmail ?? 'OTP simulasi · belum terkirim ke email'}
+        </span>
+        {displayError && <p role="alert" className="text-[12px] font-semibold text-rose-700">{displayError}</p>}
 
-        <div className="flex justify-center gap-2 pt-2">
-          {[0, 1, 2, 3, 4, 5].map((idx) => (
-            <div
-              key={idx}
-              className={`w-10 h-11 rounded-xl border flex items-center justify-center text-base font-extrabold ${
-                otp[idx]
-                  ? 'bg-emerald-50 border-emerald-400 text-slate-900'
-                  : 'bg-white border-purple-200 text-slate-400'
-              }`}
-            >
-              {otp[idx] || ''}
-            </div>
-          ))}
+        <div className="flex justify-center gap-2 pt-3" aria-label={`Kode OTP, ${otp.length} dari ${OTP_LENGTH} digit terisi`}>
+          {Array.from({ length: OTP_LENGTH }, (_, index) => {
+            const isFilled = Boolean(otp[index]);
+            const isCurrent = index === otp.length;
+
+            return (
+              <div
+                key={index}
+                className={cx(
+                  'flex h-14 w-11 items-center justify-center rounded-2xl border-2 text-xl font-extrabold transition-all',
+                  getBoxTone(isFilled, isCurrent),
+                )}
+              >
+                {isFilled ? otp[index] : isCurrent && <span aria-hidden className="rp-caret h-6 w-0.5 rounded-full bg-[#3048D9]" />}
+              </div>
+            );
+          })}
         </div>
 
-        <p className="text-[11px] text-slate-400 pt-1">Kirim ulang dalam 0:42</p>
-      </div>
+        <div className="pt-1">
+          {secondsLeft > 0 ? (
+            <p className="text-[12px] text-slate-500">
+              Ulangi simulasi dalam <span className="font-bold tabular-nums text-slate-700">{formatCountdown(secondsLeft)}</span>
+            </p>
+          ) : (
+            <button type="button" onClick={() => void resendCode()} disabled={isRequesting} className="text-[13px] font-bold text-[#3048D9] hover:underline disabled:opacity-50">
+              {isRequesting ? 'Menyiapkan OTP...' : 'Ulangi simulasi OTP'}
+            </button>
+          )}
+        </div>
+      </section>
 
-      {/* Numeric Keypad */}
-      <div className="grid grid-cols-3 gap-2 max-w-[260px] mx-auto w-full pb-2">
-        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
-          <button
-            key={num}
-            type="button"
-            onClick={() => handleDigit(num)}
-            className="h-10 rounded-xl bg-white border border-purple-100 text-slate-800 font-bold text-sm shadow-2xs active:scale-95 transition-all"
-          >
-            {num}
-          </button>
+      <div className="mx-auto grid w-full max-w-[300px] grid-cols-3 gap-2.5 pb-1">
+        {KEYPAD_DIGITS.map((digit) => (
+          <KeypadKey key={digit} onClick={() => appendDigit(digit)}>
+            {digit}
+          </KeypadKey>
         ))}
-        <button
-          type="button"
-          onClick={() => setOtp('')}
-          className="h-10 rounded-xl bg-purple-50 text-purple-700 font-bold text-[11px]"
-        >
-          Hapus
-        </button>
-        <button
-          type="button"
-          onClick={() => handleDigit('0')}
-          className="h-10 rounded-xl bg-white border border-purple-100 text-slate-800 font-bold text-sm shadow-2xs"
-        >
-          0
-        </button>
-        <button
-          type="button"
-          onClick={handleBack}
-          aria-label="Hapus Satu Digit"
-          className="h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center"
-        >
-          <Delete size={15} />
-        </button>
+        <KeypadKey tone="action" label="Hapus semua digit" onClick={clearOtp}>
+          <span className="text-[13px]">Hapus</span>
+        </KeypadKey>
+        <KeypadKey onClick={() => appendDigit('0')}>0</KeypadKey>
+        <KeypadKey tone="action" label="Hapus satu digit" onClick={removeLastDigit}>
+          <Delete size={18} />
+        </KeypadKey>
       </div>
 
-      {/* Submit Button */}
-      <button
-        type="button"
-        onClick={() => setScreen('s15-responder-dashboard')}
-        className="w-full h-12 rounded-2xl bg-[#FF7E62] text-white font-extrabold text-xs shadow-xs flex items-center justify-center gap-2 active:scale-95 transition-all"
-      >
-        <ShieldCheck size={16} />
-        <span>Berikan izin 7 hari</span>
-      </button>
-    </MobileContainer>
+      <Button icon={ShieldCheck} disabled={!isOtpComplete || isVerifying || !otpChallenge} onClick={() => void verifyOtp()}>
+        {isVerifying ? 'Memverifikasi...' : `Berikan izin ${ACCESS_GRANT.durationLabel}`}
+      </Button>
+    </ResponderScreen>
   );
 };

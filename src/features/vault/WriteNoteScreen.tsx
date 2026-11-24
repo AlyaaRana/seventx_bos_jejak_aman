@@ -1,87 +1,120 @@
 import React, { useState } from 'react';
+import { BatteryLow, Cloud, Heart, Leaf } from 'lucide-react';
 import { useVaultStore } from '../../store/useVaultStore';
 import { MobileContainer } from '../../components/layout/MobileContainer';
-import { ArrowLeft, LogOut, Heart } from 'lucide-react';
+import { ScreenHeader } from '../../components/shared/cute/ScreenHeader';
+import { ComfortBanner } from '../../components/shared/cute/ComfortBanner';
+import { FloatingDecor } from '../../components/shared/cute/FloatingDecor';
+import { DECOR_PRESETS } from '../../components/shared/cute/decorPresets';
+import { vaultApi } from './vaultApi';
+import '../../styles/cute-animations.css';
+
+const NOTE_MOODS = [
+  { label: 'Lagi cemas', icon: Cloud },
+  { label: 'Capek', icon: BatteryLow },
+  { label: 'Mulai tenang', icon: Leaf },
+] as const;
+
+/** Garis buku tulis tipis di belakang teks. */
+const NOTEBOOK_LINES: React.CSSProperties = {
+  backgroundImage: 'repeating-linear-gradient(transparent, transparent 23px, #EDE9FE 24px)',
+  backgroundAttachment: 'local',
+  lineHeight: '24px',
+};
+
+function getCheer(length: number): string {
+  if (length === 0) return 'Tidak ada yang buru-buru. Mulai dari satu kalimat saja.';
+  if (length < 200) return 'Aku mendengarkan.';
+  return 'Terima kasih sudah mau bercerita. Kamu sangat berani.';
+}
 
 export const WriteNoteScreen: React.FC = () => {
   const { setScreen, addEvidence } = useVaultStore();
-  const [mood, setMood] = useState('Lagi cemas');
+  const [mood, setMood] = useState<string>(NOTE_MOODS[0].label);
   const [content, setContent] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const cheer = getCheer(content.length);
 
-  const handleSave = () => {
-    if (!content.trim()) return;
-    addEvidence({
-      id: Date.now().toString(),
-      title: `Catatan Kronologi (${mood})`,
-      timestamp: 'Hari ini · Otomatis',
-      sha256Hex: '27b91573330bc72d16905b95d27be9ef',
-    });
-    setScreen('s04-vault-home');
+  const handleSave = async () => {
+    if (!content.trim() || isSaving) return;
+    setIsSaving(true);
+    setErrorMessage(null);
+    try {
+      const evidence = await vaultApi.saveEvidence({
+        title: `Catatan Kronologi (${mood})`,
+        type: 'note',
+      });
+      addEvidence(evidence);
+      setScreen('s04-vault-home');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Catatan demo gagal disimpan.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <MobileContainer className="bg-[#FAF8FF] text-slate-800 p-5 flex flex-col justify-between">
-      <div className="flex items-center justify-between pt-2">
-        <button
-          onClick={() => setScreen('s04-vault-home')}
-          className="w-9 h-9 rounded-full bg-white border border-slate-100 flex items-center justify-center text-slate-600 shadow-xs"
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <span className="text-[11px] font-bold text-slate-500">Tulis Cerita</span>
-        <button 
-          onClick={() => setScreen('s03-calculator')}
-          className="w-9 h-9 rounded-full bg-[#FFEDD5] text-[#D97706] flex items-center justify-center shadow-xs"
-        >
-          <LogOut size={16} />
-        </button>
-      </div>
+    <MobileContainer className="relative flex flex-col justify-between overflow-hidden bg-[#FAF8FF] p-5 font-sans text-slate-800">
+      <FloatingDecor items={DECOR_PRESETS.note} />
+      <ScreenHeader title="Tulis Cerita" />
 
-      <div className="space-y-4 my-auto flex-1 py-4 flex flex-col">
-        {/* Mood Selector */}
+      <ComfortBanner tone="amber">Mode demo hanya mencatat metadata; isi catatan belum disimpan terenkripsi.</ComfortBanner>
+
+      <div className="relative z-10 flex flex-1 flex-col space-y-4 py-2">
         <div>
-          <label className="text-[11px] font-bold text-slate-500 block mb-2">Bagaimana perasaanmu sekarang?</label>
-          <div className="flex gap-2">
-            {['Lagi cemas', 'Capek', 'Mulai tenang'].map((item) => (
+          <p className="mb-2 text-[13px] font-medium text-slate-500">Bagaimana perasaanmu sekarang?</p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Pilih suasana hati">
+            {NOTE_MOODS.map(({ label, icon: Icon }) => (
               <button
-                key={item}
-                onClick={() => setMood(item)}
-                className={`text-xs px-3 py-1.5 rounded-full font-bold transition-all ${
-                  mood === item
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-purple-100'
+                key={label}
+                type="button"
+                aria-pressed={mood === label}
+                onClick={() => setMood(label)}
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all active:scale-95 ${
+                  mood === label
+                    ? 'bg-violet-600 text-white shadow-xs'
+                    : 'border border-violet-100 bg-white text-slate-600'
                 }`}
               >
-                {item}
+                <Icon size={13} />
+                <span>{label}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Text Area Card */}
-        <div className="bg-white rounded-3xl p-4 border border-purple-100 shadow-sm flex-1 flex flex-col">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-xs font-extrabold text-slate-800">Ceritamu Hari Ini</span>
-            <span className="text-[10px] text-slate-400 font-medium">Otomatis tersimpan</span>
+        <div className="flex flex-1 flex-col rounded-3xl border border-white/90 bg-white/90 p-4 shadow-[0_8px_30px_rgba(76,29,149,0.05)]">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[13px] font-semibold text-slate-800">Ceritamu hari ini</span>
+            <span className="text-[11px] text-slate-500">{content.length} huruf</span>
           </div>
 
           <textarea
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(event) => setContent(event.target.value)}
             placeholder="Hai, hari ini aku mau cerita..."
-            className="w-full flex-1 bg-transparent border-none outline-none resize-none text-xs text-slate-700 leading-relaxed placeholder:text-slate-300"
+            aria-label="Tulis ceritamu"
+            style={NOTEBOOK_LINES}
+            className="min-h-[160px] w-full flex-1 resize-none border-none bg-transparent text-[13px] text-slate-700 outline-none placeholder:text-slate-400"
           />
+
+          <p key={cheer} className="ja-pop pt-2 text-center text-[12px] text-violet-500">
+            {cheer}
+          </p>
         </div>
       </div>
 
       <button
-        disabled={!content.trim()}
-        onClick={handleSave}
-        className="w-full h-12 rounded-2xl bg-[#FF6B50] text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 disabled:opacity-40 active:scale-95 transition-all"
+        type="button"
+        disabled={!content.trim() || isSaving}
+        onClick={() => void handleSave()}
+        className="relative z-10 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FF6B50] text-sm font-semibold text-white shadow-sm transition-all active:scale-95 disabled:opacity-40"
       >
         <Heart size={18} />
-        <span>Simpan Cerita Aman</span>
+        <span>{isSaving ? 'Menyimpan demo...' : 'Simpan cerita aman'}</span>
       </button>
+      {errorMessage && <p role="alert" className="relative z-10 text-center text-xs font-semibold text-rose-700">{errorMessage}</p>}
     </MobileContainer>
   );
 };

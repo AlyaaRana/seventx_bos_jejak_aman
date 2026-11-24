@@ -1,110 +1,158 @@
 // Layar S16 peninjauan bukti ber-watermark read-only lengkap dengan validasi hash SHA-256.
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, CheckCircle2, Eye, Lock, PlusCircle, ShieldCheck } from 'lucide-react';
 import { useVaultStore } from '../../store/useVaultStore';
-import { MobileContainer } from '../../components/layout/MobileContainer';
-import { ArrowLeft, Eye, Lock, CheckCircle2, ShieldCheck, PlusCircle } from 'lucide-react';
+import { ROUTES } from './responderData';
+import { Button, Card, IconButton, Pill, ResponderScreen, WatermarkedPreview } from './ResponderUi';
+import { responderApi } from './responderApi';
+import type { EvidenceIntegrityResult, EvidenceItem } from '../../types/responder';
 
 export const ResponderEvidenceReviewScreen: React.FC = () => {
-  const { setScreen } = useVaultStore();
-  const [chainStatus, setChainStatus] = useState('Hash SHA-256 terverifikasi utuh');
-  const [requestSent, setRequestSent] = useState(false);
+  const { setScreen, responderFlowSession } = useVaultStore();
+  const [evidence, setEvidence] = useState<EvidenceItem[]>([]);
+  const [integrity, setIntegrity] = useState<EvidenceIntegrityResult | null>(null);
+  const [isRequestSent, setIsRequestSent] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isChecking, setIsChecking] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const identity = responderFlowSession.identity;
+  const caseId = identity?.caseId;
+  const selectedEvidence = evidence[0];
+
+  useEffect(() => {
+    let isActive = true;
+    if (!caseId) return () => {
+      isActive = false;
+    };
+
+    void responderApi
+      .listCaseEvidence(caseId)
+      .then((result) => {
+        if (isActive) setEvidence(result);
+      })
+      .catch((error: unknown) => {
+        if (isActive) setErrorMessage(error instanceof Error ? error.message : 'Bukti kasus gagal dimuat.');
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [caseId]);
+
+  const displayError = errorMessage ?? (!caseId ? 'Data kasus belum tersedia. Verifikasi identitas terlebih dahulu.' : null);
+
+  const checkIntegrity = async () => {
+    if (!selectedEvidence) return;
+    setIsChecking(true);
+    setErrorMessage(null);
+    try {
+      setIntegrity(await responderApi.verifyEvidenceIntegrity(selectedEvidence.id));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Pemeriksaan integritas gagal.');
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const requestEvidence = async () => {
+    if (!caseId || !selectedEvidence) return;
+    setErrorMessage(null);
+    try {
+      await responderApi.requestAdditionalEvidence(caseId, selectedEvidence.id);
+      setIsRequestSent(true);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Permintaan bukti gagal dikirim.');
+    }
+  };
 
   return (
-    <MobileContainer className="relative bg-[#FAF8FF] text-slate-800 p-5 flex flex-col justify-between overflow-y-auto font-sans space-y-3.5">
-      {/* Header */}
-      <div className="flex items-center justify-between pt-1">
-        <button
-          type="button"
-          onClick={() => setScreen('s15-responder-dashboard')}
-          className="w-9 h-9 rounded-full bg-white border border-purple-100 flex items-center justify-center text-slate-700 shadow-xs"
-        >
-          <ArrowLeft size={16} />
-        </button>
+    <ResponderScreen scrollable>
+      <header className="flex items-center justify-between pt-1">
+        <IconButton icon={ArrowLeft} label="Kembali" onClick={() => setScreen(ROUTES.dashboard)} />
 
         <div className="text-center">
-          <p className="text-[10px] text-slate-400 font-bold">Kasus #2026-0419</p>
+          <p className="text-[10px] font-bold text-slate-400">Kasus {caseId ?? '—'}</p>
           <h1 className="text-sm font-extrabold text-slate-900">Tinjau bukti</h1>
         </div>
 
-        <span className="bg-purple-100 text-purple-800 text-[10px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1">
-          <Eye size={11} /> Hanya baca
-        </span>
-      </div>
+        <Pill tone="info" icon={Eye}>
+          Hanya baca · demo
+        </Pill>
+      </header>
 
-      {/* Evidence Card with Anti-Leak Watermark */}
-      <div className="bg-white border border-purple-100 rounded-3xl p-4 shadow-xs space-y-2.5 text-left">
+      {displayError && <p role="alert" className="text-center text-[12px] font-semibold text-rose-700">{displayError}</p>}
+
+      {!caseId ? (
+        <Card className="text-center text-sm font-semibold text-slate-600">{displayError}</Card>
+      ) : isLoading ? (
+        <Card className="text-center text-sm font-semibold text-slate-600">Memuat bukti demo...</Card>
+      ) : selectedEvidence ? (
+      <>
+      <Card className="space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-extrabold text-slate-900">Foto bukti #01</p>
-          <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-            <Lock size={10} /> Tidak bisa diunduh
-          </span>
+          <p className="text-xs font-extrabold text-slate-900">{selectedEvidence.title}</p>
+          <Pill tone="neutral" icon={Lock}>
+            Tidak bisa diunduh
+          </Pill>
         </div>
 
-        <div className="relative h-44 rounded-2xl bg-gradient-to-br from-[#F3E8FF] via-[#FAF8FF] to-[#DCFCE7]/60 border border-purple-100 overflow-hidden flex items-center justify-center select-none">
-          {/* Watermark Diagonal */}
-          <div className="grid grid-cols-2 gap-4 -rotate-12 text-[10px] font-mono font-bold text-slate-400/75 pointer-events-none text-center">
-            <span>Sari Kusuma, S.H. · Kasus #2026-0419</span>
-            <span>Kasus #2026-0419 · Sari Kusuma, S.H.</span>
-            <span>Sari Kusuma, S.H. · Kasus #2026-0419</span>
-            <span>Kasus #2026-0419 · Sari Kusuma, S.H.</span>
-          </div>
-          <span className="relative z-10 bg-white/90 border border-purple-200 px-3 py-1 rounded-full text-[11px] font-bold text-purple-900 shadow-2xs">
-            Pratinjau Terenkripsi
+        <WatermarkedPreview watermark={`${identity?.name ?? 'Pendamping'} · Kasus ${caseId ?? ''}`} className="h-44">
+          <span className="rounded-full border border-purple-200 bg-white/90 px-3 py-1 text-[11px] font-bold text-purple-900 shadow-2xs">
+            Pratinjau demo
           </span>
-        </div>
+        </WatermarkedPreview>
 
-        <p className="text-[10px] text-slate-400 text-center">
-          Tayangan bertanda namamu untuk mencegah penyebaran ulang.
+        <p className="text-center text-[10px] text-slate-400">
+          Tampilan contoh bertanda nama; berkas asli belum terhubung.
         </p>
-      </div>
+      </Card>
 
-      {/* Digital Hash Log Card */}
-      <div className="bg-white border border-slate-100 rounded-3xl p-3.5 shadow-xs space-y-2 text-left">
+      <Card tone="neutral" className="space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-extrabold text-slate-900">Sidik digital a38f...c721</p>
-          <span className="bg-[#DCFCE7] text-[#047857] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-            <CheckCircle2 size={11} /> Utuh
-          </span>
+          <p className="text-xs font-extrabold text-slate-900">
+            Sidik digital {integrity?.fingerprint ?? 'belum diperiksa'}
+          </p>
+          <Pill tone={integrity?.isValid ? 'success' : 'neutral'} icon={CheckCircle2}>
+            {integrity ? (integrity.isValid ? 'Utuh' : 'Perlu ditinjau') : 'Belum dicek'}
+          </Pill>
         </div>
 
-        <div className="text-[11px] text-slate-500 space-y-1">
-          <div className="flex justify-between">
-            <span>Dicatat dari ponsel</span>
-            <strong className="text-slate-700">19 Nov · 21.14</strong>
-          </div>
-          <div className="flex justify-between">
-            <span>Terkunci di server</span>
-            <strong className="text-slate-700">19 Nov · 21.15</strong>
-          </div>
-        </div>
+        <dl className="space-y-1 text-[11px] text-slate-500">
+          {(integrity?.events ?? []).map(({ label, value }) => (
+            <div key={label} className="flex justify-between">
+              <dt>{label}</dt>
+              <dd className="font-bold text-slate-700">{value}</dd>
+            </div>
+          ))}
+        </dl>
 
-        <p className="text-[10px] text-emerald-700 font-semibold pt-1">{chainStatus}</p>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="space-y-2 pb-1">
-        <button
-          type="button"
-          onClick={() => setChainStatus('Seluruh rantai hash terverifikasi 100% tanpa perubahan.')}
-          className="w-full h-11 rounded-2xl bg-[#FF7E62] text-white font-extrabold text-xs shadow-xs flex items-center justify-center gap-2 active:scale-95 transition-all"
-        >
-          <ShieldCheck size={15} />
-          <span>Cek keutuhan seluruh rantai</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setRequestSent(true)}
-          className="w-full h-11 rounded-2xl bg-white border border-purple-200 text-purple-900 font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition-all"
-        >
-          <PlusCircle size={15} />
-          <span>{requestSent ? 'Permintaan bukti dikirim ke penyintas' : 'Minta bukti tambahan'}</span>
-        </button>
-
-        <p className="text-[10px] text-slate-400 text-center">
-          Permintaan tambahan bebas ditolak penyintas.
+        <p className="pt-1 text-[10px] font-semibold text-emerald-700">
+          {integrity
+            ? integrity.isValid
+              ? 'Seluruh rantai hash terverifikasi tanpa perubahan.'
+              : 'Hash perlu diperiksa oleh petugas berwenang.'
+            : 'Jalankan pemeriksaan untuk melihat status integritas.'}
         </p>
+      </Card>
+
+      <div className="space-y-2">
+        <Button icon={ShieldCheck} disabled={isChecking} onClick={() => void checkIntegrity()}>
+          {isChecking ? 'Memeriksa...' : 'Cek keutuhan seluruh rantai'}
+        </Button>
+
+        <Button variant="secondary" icon={PlusCircle} disabled={isRequestSent} onClick={() => void requestEvidence()}>
+          {isRequestSent ? 'Permintaan bukti dikirim ke penyintas' : 'Minta bukti tambahan'}
+        </Button>
+
+        <p className="text-center text-[10px] text-slate-400">Permintaan tambahan bebas ditolak penyintas.</p>
       </div>
-    </MobileContainer>
+      </>
+      ) : (
+        <Card className="text-center text-sm font-semibold text-slate-600">Belum ada bukti pada kasus ini.</Card>
+      )}
+    </ResponderScreen>
   );
 };

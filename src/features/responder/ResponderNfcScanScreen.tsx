@@ -1,79 +1,100 @@
-// Layar S09b Langkah 2/3: Panduan menempelkan e-KTP fisik pada sensor NFC ponsel
-import React from 'react';
+// Layar langkah 1/3: Simulasi membaca chip NFC e-KTP.
+import React, { useEffect, useRef, useState } from 'react';
+import { CheckCircle2, LoaderCircle, Nfc } from 'lucide-react';
 import { useVaultStore } from '../../store/useVaultStore';
-import { MobileContainer } from '../../components/layout/MobileContainer';
+import { ROUTES } from './responderData';
 import { ResponderStepHeader } from './ResponderStepHeader';
-import { Nfc, Heart } from 'lucide-react';
+import { Button, Card, HelperBubble, Pill, ResponderScreen, TipsCard } from './ResponderUi';
+import { responderApi } from './responderApi';
+
+const SCAN_TIPS = [
+  'Lepaskan casing HP jika terlalu tebal.',
+  'Tahan e-KTP dan jangan digerakkan saat memindai.',
+] as const;
 
 export const ResponderNfcScanScreen: React.FC = () => {
-  const { setScreen } = useVaultStore();
+  const { setScreen, updateResponderFlowSession } = useVaultStore();
+  const [status, setStatus] = useState<'idle' | 'scanning' | 'verified' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const scanTimer = useRef<number | null>(null);
+  const nextTimer = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (scanTimer.current !== null) window.clearTimeout(scanTimer.current);
+      if (nextTimer.current !== null) window.clearTimeout(nextTimer.current);
+    },
+    [],
+  );
+
+  const startScan = async () => {
+    if (status === 'scanning') return;
+    setStatus('scanning');
+    setErrorMessage(null);
+    if (scanTimer.current !== null) window.clearTimeout(scanTimer.current);
+    try {
+      const scan = await responderApi.readEktpNfc();
+      updateResponderFlowSession({ nfcScanId: scan.scanId, identity: null, otpChallenge: null, grant: null });
+      setStatus('verified');
+      nextTimer.current = window.setTimeout(() => setScreen(ROUTES.ocr), 900);
+    } catch (error) {
+      setStatus('error');
+      setErrorMessage(error instanceof Error ? error.message : 'Pemindaian NFC demo gagal.');
+    }
+  };
 
   return (
-    <MobileContainer className="relative bg-[#FAF8FF] text-slate-800 p-5 flex flex-col justify-between overflow-hidden font-sans">
-      <ResponderStepHeader
-        step={2}
-        title="Pemindaian e-KTP"
-        backTarget="s09a-responder-method"
-      />
+    <ResponderScreen>
+      <ResponderStepHeader step={1} title="Pemindaian NFC e-KTP" backTarget={ROUTES.welcome} />
 
-      {/* Helper Bubble */}
-      <div className="bg-white border border-purple-100 rounded-2xl p-3 flex items-center gap-2.5 shadow-xs mt-3">
-        <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-extrabold shrink-0">
-          😊
-        </span>
-        <p className="text-xs font-semibold text-slate-700 text-left">
-          Tempel pelan di belakang HP ya, kita baca chip resminya bareng!
-        </p>
-      </div>
+      <HelperBubble>
+        {errorMessage
+          ? errorMessage
+          : status === 'verified'
+          ? 'Chip e-KTP terbaca dalam simulasi. Membuka pengenalan data OCR...'
+          : status === 'scanning'
+            ? 'Sedang membaca chip e-KTP dalam mode demo.'
+            : 'Tempelkan e-KTP di belakang HP, lalu mulai pemindaian demo.'}
+      </HelperBubble>
 
-      {/* NFC Scan Card */}
-      <div className="my-auto bg-white border border-purple-100 rounded-[28px] p-5 text-center space-y-3 shadow-xs relative">
-        <button
-          type="button"
-          aria-label="Tandai Favorit"
-          className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center ml-auto"
-        >
-          <Heart size={14} />
-        </button>
+      <main className="flex flex-[1.15] flex-col justify-center py-1">
+        {status !== 'verified' ? (
+          <Card className="space-y-3 py-6 text-center">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-orange-100 text-[#FF7E62] shadow-inner">
+              {status === 'scanning' ? <LoaderCircle size={34} className="animate-spin" /> : <Nfc size={34} />}
+            </div>
+            <h2 className="text-base font-extrabold text-slate-900">
+              {status === 'scanning' ? 'Membaca chip e-KTP...' : 'Tempelkan e-KTP'}
+            </h2>
+            <p className="mx-auto max-w-[220px] text-[11px] leading-relaxed text-slate-500">
+              Simulasi ini belum terhubung ke sensor NFC perangkat.
+            </p>
+          </Card>
+        ) : (
+          <Card tone="soft" className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Pill tone="success" icon={CheckCircle2}>Chip terbaca</Pill>
+              <Pill tone="neutral">Simulasi</Pill>
+            </div>
+            <div className="rounded-2xl border border-purple-100 bg-white p-3 text-center">
+              <p className="text-sm font-extrabold text-slate-900">Contoh chip terdeteksi</p>
+              <p className="mt-1 text-[11px] text-slate-500">Data identitas akan ditampilkan pada tahap OCR.</p>
+            </div>
+          </Card>
+        )}
+      </main>
 
-        <div className="w-20 h-20 mx-auto rounded-full bg-orange-100 text-[#FF7E62] flex items-center justify-center shadow-inner">
-          <Nfc size={34} />
-        </div>
+      {status !== 'verified' && <TipsCard title="Tips Pemindaian:" tips={SCAN_TIPS} />}
 
-        <h2 className="text-base font-extrabold text-slate-900">Tempelkan e-KTP</h2>
-        <p className="text-[11px] text-slate-500 max-w-[220px] mx-auto leading-relaxed">
-          Posisikan e-KTP di belakang HP, sesuaikan dengan posisi sensor NFC.
-        </p>
-      </div>
-
-      {/* Tips Pemindaian */}
-      <div className="bg-white border border-slate-100 rounded-2xl p-3.5 text-left space-y-1 shadow-xs mb-3">
-        <p className="text-xs font-extrabold text-slate-800">Tips Pemindaian:</p>
-        <ul className="text-[11px] text-slate-500 space-y-0.5 list-disc list-inside">
-          <li>Lepaskan casing HP jika terlalu tebal.</li>
-          <li>Tahan e-KTP dan jangan digerakkan saat memindai.</li>
-        </ul>
-      </div>
-
-      {/* Action CTA */}
       <div className="space-y-2">
-        <button
-          type="button"
-          onClick={() => setScreen('s13-responder-otp')}
-          className="w-full h-12 rounded-2xl bg-[#FF7E62] text-white font-extrabold text-xs shadow-xs flex items-center justify-center gap-2 active:scale-95 transition-all"
-        >
-          <Nfc size={16} />
-          <span>Mulai Pemindaian</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setScreen('s09c-responder-ocr')}
-          className="w-full text-[11px] font-bold text-orange-600 underline py-1"
-        >
-          HP tidak ada NFC? Pindai lewat Foto OCR →
-        </button>
+        {status === 'idle' || status === 'error' ? (
+          <Button icon={Nfc} onClick={startScan}>Tempel & mulai pemindaian demo</Button>
+        ) : (
+          <Button icon={status === 'scanning' ? LoaderCircle : CheckCircle2} onClick={startScan} disabled>
+            {status === 'scanning' ? 'Sedang Memindai...' : 'Membuka tahap OCR...'}
+          </Button>
+        )}
       </div>
-    </MobileContainer>
+    </ResponderScreen>
   );
 };

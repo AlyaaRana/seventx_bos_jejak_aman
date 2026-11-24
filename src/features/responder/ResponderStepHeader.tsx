@@ -1,72 +1,72 @@
-// Komponen header langkah 1-2-3 khusus alur verifikasi pendamping.
+// Header langkah wizard pendamping: tombol kembali, judul, lencana peran, dan progres bersegmen.
 import React from 'react';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, BadgeCheck } from 'lucide-react';
 import { useVaultStore } from '../../store/useVaultStore';
+import { TOTAL_STEPS, type ScreenId } from './responderData';
+import { cx } from './responderUtils';
 
 interface ResponderStepHeaderProps {
-  step: 1 | 2 | 3;
-  title: string;
-  backTarget?: 's01-welcome' | 's09a-responder-method' | 's09b-responder-nfc';
-  leftLabel?: string;
+  step: number;
+  backTarget: ScreenId;
+  title?: string;
 }
 
-export const ResponderStepHeader: React.FC<ResponderStepHeaderProps> = ({
-  step,
-  title,
-  backTarget = 's01-welcome',
-  leftLabel = 'Kembali',
-}) => {
+const SEGMENT_TONES = {
+  done: 'bg-emerald-400',
+  current: 'bg-gradient-to-r from-[#3048D9] to-[#7C8CF8]',
+  upcoming: 'bg-slate-200',
+} as const;
+
+function getSegmentTone(segment: number, step: number): string {
+  if (segment < step) return SEGMENT_TONES.done;
+  if (segment === step) return SEGMENT_TONES.current;
+  return SEGMENT_TONES.upcoming;
+}
+
+export const ResponderStepHeader: React.FC<ResponderStepHeaderProps> = ({ step, backTarget, title }) => {
   const { setScreen } = useVaultStore();
 
   return (
-    <div className="relative z-10 space-y-3 pt-1">
-      {/* Top Bar: Tombol Kembali & Badge Langkah (beri ruang kanan untuk QuickExitFAB) */}
-      <div className="flex items-center justify-between pr-24">
+    <header className="space-y-3 pb-3">
+      <div className="flex items-center gap-3">
         <button
           type="button"
+          aria-label="Kembali"
           onClick={() => setScreen(backTarget)}
-          className="px-3 h-9 rounded-full bg-white border border-purple-100 flex items-center gap-1.5 text-xs font-bold text-slate-700 shadow-xs active:scale-95 transition-all shrink-0"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-100 bg-white text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95"
         >
-          <ArrowLeft size={15} />
-          <span>{leftLabel}</span>
+          <ArrowLeft size={18} />
         </button>
 
-        <span className="text-[10px] font-extrabold text-[#7E22CE] bg-[#F3E8FF] px-3 py-1 rounded-full tracking-wide whitespace-nowrap">
-          LANGKAH {step} DARI 3
+        <div className="min-w-0 flex-1">
+          <p className="text-[12px] font-semibold text-slate-500">
+            Langkah {step} dari {TOTAL_STEPS}
+          </p>
+          {title && <h1 className="truncate text-base font-extrabold leading-tight tracking-tight text-slate-900">{title}</h1>}
+        </div>
+
+        <span className="flex h-8 shrink-0 items-center gap-1 rounded-full border border-purple-100 bg-purple-50 px-2.5 text-[12px] font-bold text-purple-700">
+          <BadgeCheck size={13} />
+          Pendamping
         </span>
       </div>
 
-      <h1 className="text-center text-base font-extrabold text-slate-900">{title}</h1>
-
-      {/* Progress Stepper 1 -> 2 -> 3 */}
-      <div className="flex items-center justify-center gap-3 px-4">
-        {[1, 2, 3].map((num, idx) => {
-          const isDone = step > num;
-          const isCurrent = step === num;
-          return (
-            <React.Fragment key={num}>
-              <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold transition-all ${
-                  isDone
-                    ? 'bg-[#DCFCE7] text-[#047857] border border-emerald-300'
-                    : isCurrent
-                    ? 'bg-[#FF7E62] text-white shadow-xs scale-105'
-                    : 'bg-purple-100 text-purple-400'
-                }`}
-              >
-                {isDone ? <Check size={14} strokeWidth={3} /> : num}
-              </div>
-              {idx < 2 && (
-                <div
-                  className={`h-1 flex-1 max-w-[44px] rounded-full ${
-                    step > num ? 'bg-emerald-300' : 'bg-purple-100'
-                  }`}
-                />
-              )}
-            </React.Fragment>
-          );
-        })}
+      <div
+        role="progressbar"
+        aria-label={`Langkah ${step} dari ${TOTAL_STEPS}`}
+        aria-valuemin={1}
+        aria-valuemax={TOTAL_STEPS}
+        aria-valuenow={step}
+        className="grid gap-1.5"
+        style={{ gridTemplateColumns: `repeat(${TOTAL_STEPS}, minmax(0, 1fr))` }}
+      >
+        {Array.from({ length: TOTAL_STEPS }, (_, index) => (
+          <span
+            key={index}
+            className={cx('h-1.5 rounded-full transition-colors duration-500', getSegmentTone(index + 1, step))}
+          />
+        ))}
       </div>
-    </div>
+    </header>
   );
 };

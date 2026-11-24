@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import type { EvidenceRecord } from '../types/evidence';
 import type { ScreenRoute } from '../types/navigation';
+import type { ResponderFlowSession } from '../types/responder';
 
 export type UserRole = 'survivor' | 'responder';
 
@@ -12,13 +13,24 @@ interface VaultState {
   isVaultUnlocked: boolean;
   screen: ScreenRoute;
   evidenceList: EvidenceRecord[];
+  responderFlowSession: ResponderFlowSession;
   setRole: (role: UserRole) => void;
   setScreen: (screen: ScreenRoute) => void;
+  setEvidenceList: (items: EvidenceRecord[]) => void;
+  updateResponderFlowSession: (session: Partial<ResponderFlowSession>) => void;
+  clearResponderFlowSession: () => void;
   setupNewPin: (newPin: string) => void;
   unlockVaultWithPIN: (enteredPin: string) => boolean;
   lockVault: () => void;
   addEvidence: (item: EvidenceRecord) => void;
 }
+
+const createEmptyResponderFlowSession = (): ResponderFlowSession => ({
+  nfcScanId: null,
+  identity: null,
+  otpChallenge: null,
+  grant: null,
+});
 
 export const useVaultStore = create<VaultState>((set, get) => ({
   role: 'survivor',
@@ -26,27 +38,20 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   secretPin: '1407',
   isVaultUnlocked: false,
   screen: 's01-welcome',
-  evidenceList: [
-    {
-      id: '1',
-      title: 'Foto Bukti #01',
-      timestamp: '19 Nov · 21:14',
-      sha256Hex: 'c178d0bf67dd4a21e5e619832fa60000',
-    },
-    {
-      id: '2',
-      title: 'Rekaman Suara #01',
-      timestamp: '19 Nov · 21:18',
-      sha256Hex: 'c72d16905b953304fd85f604c178d0bf',
-    },
-  ],
+  responderFlowSession: createEmptyResponderFlowSession(),
+  evidenceList: [],
   setRole: (role) =>
     set((state) => ({
       role,
       isVaultUnlocked: role === 'survivor' ? state.isVaultUnlocked : false,
-      screen: role === 'responder' ? 's09a-responder-method' : 's01-welcome',
+      screen: role === 'responder' ? 's09-responder-welcome' : 's01-welcome',
+      responderFlowSession: createEmptyResponderFlowSession(),
     })),
   setScreen: (screen) => set({ screen }),
+  setEvidenceList: (items) => set({ evidenceList: items }),
+  updateResponderFlowSession: (session) =>
+    set((state) => ({ responderFlowSession: { ...state.responderFlowSession, ...session } })),
+  clearResponderFlowSession: () => set({ responderFlowSession: createEmptyResponderFlowSession() }),
   setupNewPin: (newPin) => {
     set({
       role: 'survivor',

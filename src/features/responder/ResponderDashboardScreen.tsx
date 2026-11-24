@@ -1,239 +1,225 @@
 // Layar S15 Dashboard Pendamping terverifikasi e-KTP dengan timer akses, catatan kenyamanan, dan daftar bukti.
-import React, { useState } from 'react';
-import { useVaultStore } from '../../store/useVaultStore';
-import { MobileContainer } from '../../components/layout/MobileContainer';
+import React, { useEffect, useState } from 'react';
 import {
-  BadgeCheck,
-  Clock,
-  MessageSquareHeart,
-  FileCheck2,
   Camera,
-  Mic,
-  FileText,
-  NotebookPen,
   ChevronRight,
+  Clock,
+  FileCheck2,
+  FileText,
+  MessageSquareHeart,
+  Mic,
+  NotebookPen,
   ShieldCheck,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { useVaultStore } from '../../store/useVaultStore';
+import { ROUTES } from './responderData';
+import { Button, Card, Pill, ResponderIdentityCard, ResponderScreen } from './ResponderUi';
+import { cx } from './responderUtils';
+import { responderApi } from './responderApi';
+import type { EvidenceItem, EvidenceKind, ResponderDashboardData } from '../../types/responder';
 
-export const ResponderDashboardScreen: React.FC = () => {
-  const { setScreen } = useVaultStore();
-  const [durationFilter, setDurationFilter] = useState<'24j' | '7hari'>('7hari');
-  const [noteInput, setNoteInput] = useState('');
+/* -------------------------------------------------------------------------- */
+/* Konfigurasi                                                                */
+/* -------------------------------------------------------------------------- */
+
+const EVIDENCE_KIND_STYLE: Record<EvidenceKind, { icon: LucideIcon; tile: string }> = {
+  photo: { icon: Camera, tile: 'bg-orange-100 text-orange-600' },
+  audio: { icon: Mic, tile: 'bg-purple-100 text-purple-600' },
+  document: { icon: FileText, tile: 'bg-emerald-100 text-emerald-600' },
+  note: { icon: NotebookPen, tile: 'bg-amber-100 text-amber-600' },
+};
+
+/* -------------------------------------------------------------------------- */
+/* Bagian-bagian layar                                                        */
+/* -------------------------------------------------------------------------- */
+
+const StatusBanner: React.FC = () => (
+  <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-100 bg-emerald-50/80 px-3 py-2.5">
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+      <ShieldCheck size={16} />
+    </div>
+    <p className="text-[10px] font-bold leading-snug text-emerald-950">
+      Identitas contoh cocok. Semua bukti demo siap ditinjau.
+    </p>
+  </div>
+);
+
+interface AccessTimerCardProps {
+  durationLabel: string;
+  remainingLabel: string;
+}
+
+const AccessTimerCard: React.FC<AccessTimerCardProps> = ({ durationLabel, remainingLabel }) => (
+  <Card tone="warm" className="space-y-2 py-3">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-slate-900">
+        <Clock size={14} className="text-orange-500" />
+        <span>Batas Waktu Akses</span>
+      </div>
+      <Pill tone="warning">{remainingLabel}</Pill>
+    </div>
+
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[10px] text-slate-400">Akses {durationLabel} · otomatis terkunci saat habis</span>
+    </div>
+  </Card>
+);
+
+const ComfortNoteCard: React.FC = () => {
+  const [draft, setDraft] = useState('');
   const [savedNote, setSavedNote] = useState<string | null>(null);
 
-  const handleSaveNote = () => {
-    if (!noteInput.trim()) return;
-    setSavedNote(noteInput.trim());
-    setNoteInput('');
+  const saveNote = () => {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    setSavedNote(trimmed);
+    setDraft('');
   };
 
   return (
-    <MobileContainer className="relative bg-[#FAF8FF] text-slate-800 p-4 flex flex-col justify-between overflow-y-auto font-sans space-y-3.5">
-      {/* Top Responder Identity Card */}
-      <div className="bg-white border border-purple-100 rounded-3xl p-4 shadow-xs space-y-2.5 text-left">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center font-extrabold text-sm">
-              SK
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 block">Pendamping Resmi</span>
-              <h1 className="text-sm font-extrabold text-slate-900">Sari Kusuma, S.H.</h1>
-              <p className="text-[10px] text-slate-400">LBH APIK · Kasus #C419</p>
-            </div>
-          </div>
-
-          <span className="bg-[#DCFCE7] text-[#047857] text-[10px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1 shrink-0">
-            <BadgeCheck size={12} /> e-KTP Sah
-          </span>
-        </div>
-
-        <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px]">
-          <span className="text-purple-700 font-bold">● Langkah 3 dari 3 · Hanya Baca</span>
-          <button
-            type="button"
-            onClick={() => setScreen('s03-calculator')}
-            className="bg-orange-100 text-orange-700 font-bold px-3 py-1 rounded-full active:scale-95 transition-all"
-          >
-            Keluar
-          </button>
-        </div>
+    <Card tone="soft" className="space-y-2 py-3">
+      <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-purple-950">
+        <MessageSquareHeart size={15} className="text-purple-600" />
+        <span>Catatan Kenyamanan Klien</span>
       </div>
 
-      {/* Gentle Status Banner */}
-      <div className="bg-[#DCFCE7]/80 border border-emerald-200 rounded-2xl p-3 flex items-center gap-2 text-left">
-        <ShieldCheck size={16} className="text-emerald-700 shrink-0" />
-        <p className="text-[11px] font-bold text-emerald-950">
-          Identitas cocok. Semua berkas penyintas siap ditinjau dengan lembut.
+      <p className="text-[10px] leading-relaxed text-slate-600">
+        Klien memilih komunikasi teks/suara tanpa tatap muka. Hindari mengulang kronologi yang sudah tertulis.
+      </p>
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="Tambah catatan sesi..."
+          aria-label="Catatan sesi"
+          className="h-8 min-w-0 flex-1 rounded-xl border border-purple-200/70 bg-white px-3 text-[11px] text-slate-800 outline-none focus:border-purple-400"
+        />
+        <Button size="sm" onClick={saveNote}>
+          Simpan
+        </Button>
+      </div>
+
+      {savedNote && (
+        <p className="rounded-xl border border-purple-100 bg-white px-3 py-1.5 text-[11px] font-medium text-purple-900">
+          Catatan tersimpan: {savedNote}
         </p>
+      )}
+    </Card>
+  );
+};
+
+interface EvidenceRowProps {
+  item: EvidenceItem;
+  onOpen: () => void;
+}
+
+const EvidenceRow: React.FC<EvidenceRowProps> = ({ item, onOpen }) => {
+  const { icon: Icon, tile } = EVIDENCE_KIND_STYLE[item.kind];
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center justify-between rounded-2xl border border-slate-100 bg-white p-2.5 text-left shadow-2xs transition-all active:scale-[0.99]"
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <div className={cx('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', tile)}>
+          <Icon size={18} />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-[11px] font-extrabold text-slate-900">{item.title}</p>
+          <p className="truncate text-[9px] text-slate-400">{item.meta}</p>
+          <p className="truncate text-[9px] text-slate-400">{item.status}</p>
+        </div>
       </div>
 
-      {/* Access Countdown Card */}
-      <div className="bg-white border border-orange-100 rounded-3xl p-3.5 shadow-xs space-y-2 text-left">
+      <div className="flex items-center gap-1">
+        <Pill tone="neutral">Demo</Pill>
+        <ChevronRight size={15} className="text-slate-300" />
+      </div>
+    </button>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/* Layar                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export const ResponderDashboardScreen: React.FC = () => {
+  const { setScreen, responderFlowSession } = useVaultStore();
+  const [dashboard, setDashboard] = useState<ResponderDashboardData | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const grantId = responderFlowSession.grant?.grantId;
+
+  const openEvidenceReview = () => setScreen(ROUTES.evidenceReview);
+
+  useEffect(() => {
+    let isActive = true;
+    if (!grantId) return () => {
+      isActive = false;
+    };
+
+    void responderApi
+      .getDashboard(grantId)
+      .then((result) => {
+        if (isActive) setDashboard(result);
+      })
+      .catch((error: unknown) => {
+        if (isActive) setErrorMessage(error instanceof Error ? error.message : 'Dashboard gagal dimuat.');
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [grantId]);
+
+  const displayError = errorMessage ?? (!grantId ? 'Izin akses belum tersedia. Verifikasi OTP terlebih dahulu.' : null);
+
+  if (displayError) {
+    return (
+      <ResponderScreen>
+        <Card tone="neutral" className="space-y-3 text-center">
+          <p role="alert" className="text-sm font-bold text-rose-700">{displayError}</p>
+          <Button onClick={() => setScreen(ROUTES.otp)}>Kembali ke OTP</Button>
+        </Card>
+      </ResponderScreen>
+    );
+  }
+
+  if (!dashboard) {
+    return (
+      <ResponderScreen>
+        <Card className="text-center text-sm font-semibold text-slate-600">Memuat dashboard demo...</Card>
+      </ResponderScreen>
+    );
+  }
+
+  return (
+    <ResponderScreen scrollable>
+      <ResponderIdentityCard identity={dashboard.responder} onExit={() => setScreen(ROUTES.quickExit)} />
+      <StatusBanner />
+      <AccessTimerCard durationLabel={dashboard.grant.durationLabel} remainingLabel={dashboard.grant.remainingLabel} />
+      <ComfortNoteCard />
+
+      <section className="space-y-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-900">
-            <Clock size={14} className="text-orange-500" />
-            <span>Batas Waktu Akses</span>
-          </div>
-          <span className="bg-orange-100 text-orange-700 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full">
-            4h 22j 43m
-          </span>
-        </div>
-
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <span className="text-[10px] text-slate-400">Otomatis terkunci saat habis</span>
-          <div className="flex gap-1.5">
-            {(['24j', '7hari'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setDurationFilter(tab)}
-                className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
-                  durationFilter === tab
-                    ? 'bg-[#FF7E62] text-white'
-                    : 'bg-slate-100 text-slate-600'
-                }`}
-              >
-                {tab === '24j' ? '24J' : '7 Hari'}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Client Comfort Note Card */}
-      <div className="bg-purple-50/70 border border-purple-100 rounded-3xl p-3.5 space-y-2.5 text-left">
-        <div className="flex items-center gap-1.5 text-xs font-extrabold text-purple-950">
-          <MessageSquareHeart size={15} className="text-purple-600" />
-          <span>Catatan Kenyamanan Klien</span>
-        </div>
-        <p className="text-[11px] text-slate-600 leading-relaxed">
-          Klien memilih komunikasi teks/suara tanpa tatap muka. Hindari mengulang pertanyaan kronologi yang sudah tertulis.
-        </p>
-
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={noteInput}
-            onChange={(e) => setNoteInput(e.target.value)}
-            placeholder="Tambah catatan sesi..."
-            className="flex-1 h-9 px-3 rounded-xl bg-white border border-purple-200/70 text-xs text-slate-800 outline-none"
-          />
-          <button
-            type="button"
-            onClick={handleSaveNote}
-            className="px-3.5 h-9 rounded-xl bg-[#FF7E62] text-white text-xs font-bold active:scale-95 transition-all"
-          >
-            Simpan
-          </button>
-        </div>
-
-        {savedNote && (
-          <p className="text-[11px] bg-white border border-purple-100 rounded-xl px-3 py-1.5 text-purple-900 font-medium">
-            Catatan tersimpan: {savedNote}
-          </p>
-        )}
-      </div>
-
-      {/* Evidence List Section */}
-      <div className="space-y-2 text-left pb-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-extrabold text-slate-900">Berkas Bukti (4)</h2>
-          <button
-            type="button"
-            onClick={() => setScreen('s16-evidence-review')}
-            className="bg-[#DCFCE7] text-[#047857] text-[10px] font-extrabold px-3 py-1 rounded-full flex items-center gap-1"
-          >
-            <FileCheck2 size={12} /> Cek Keaslian
+          <h2 className="text-xs font-extrabold text-slate-900">Berkas Bukti ({dashboard.evidence.length})</h2>
+          <button type="button" onClick={openEvidenceReview} className="active:scale-95">
+            <Pill tone="success" icon={FileCheck2}>
+              Cek Keaslian
+            </Pill>
           </button>
         </div>
 
         <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setScreen('s16-evidence-review')}
-            className="w-full bg-white border border-slate-100 rounded-2xl p-3 flex items-center justify-between shadow-2xs active:scale-[0.99] transition-all text-left"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
-                <Camera size={17} />
-              </div>
-              <div>
-                <p className="text-xs font-extrabold text-slate-900">Foto Bukti #01</p>
-                <p className="text-[10px] text-slate-400">19 Nov 2026 · 21:14 · 2.4 MB</p>
-                <p className="text-[10px] text-slate-400">Terkunci aman · Siap ditinjau</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="bg-[#DCFCE7] text-[#047857] text-[10px] font-bold px-2 py-0.5 rounded-full">Asli</span>
-              <ChevronRight size={15} className="text-slate-300" />
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setScreen('s16-evidence-review')}
-            className="w-full bg-white border border-slate-100 rounded-2xl p-3 flex items-center justify-between shadow-2xs active:scale-[0.99] transition-all text-left"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
-                <Mic size={17} />
-              </div>
-              <div>
-                <p className="text-xs font-extrabold text-slate-900">Rekaman Suara #01</p>
-                <p className="text-[10px] text-slate-400">19 Nov 2026 · 21:18 · 3 mnt</p>
-                <p className="text-[10px] text-slate-400">Terkunci aman · Siap didengar</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="bg-[#DCFCE7] text-[#047857] text-[10px] font-bold px-2 py-0.5 rounded-full">Asli</span>
-              <ChevronRight size={15} className="text-slate-300" />
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setScreen('s16-evidence-review')}
-            className="w-full bg-white border border-slate-100 rounded-2xl p-3 flex items-center justify-between shadow-2xs active:scale-[0.99] transition-all text-left"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                <FileText size={17} />
-              </div>
-              <div>
-                <p className="text-xs font-extrabold text-slate-900">Visum RSUD Tarakan</p>
-                <p className="text-[10px] text-slate-400">20 Nov 2026 · 07:45</p>
-                <p className="text-[10px] text-slate-400">Dikirim dr. Ratna Dewi · RSUD</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="bg-[#DCFCE7] text-[#047857] text-[10px] font-bold px-2 py-0.5 rounded-full">Asli</span>
-              <ChevronRight size={15} className="text-slate-300" />
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setScreen('s16-evidence-review')}
-            className="w-full bg-white border border-slate-100 rounded-2xl p-3 flex items-center justify-between shadow-2xs active:scale-[0.99] transition-all text-left"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
-                <NotebookPen size={17} />
-              </div>
-              <div>
-                <p className="text-xs font-extrabold text-slate-900">Catatan Kronologi</p>
-                <p className="text-[10px] text-slate-400">20 Nov 2026 · 08:10</p>
-                <p className="text-[10px] text-slate-400">Ditulis penyintas · Terjaga utuh</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="bg-[#DCFCE7] text-[#047857] text-[10px] font-bold px-2 py-0.5 rounded-full">Asli</span>
-              <ChevronRight size={15} className="text-slate-300" />
-            </div>
-          </button>
+          {dashboard.evidence.map((item) => (
+            <EvidenceRow key={item.id} item={item} onOpen={openEvidenceReview} />
+          ))}
         </div>
-      </div>
-    </MobileContainer>
+      </section>
+    </ResponderScreen>
   );
 };
