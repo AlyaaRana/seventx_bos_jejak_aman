@@ -1,0 +1,36 @@
+/* Gerak halus khusus layar Home. Semuanya dimatikan kalau pengguna memilih "reduce motion". */
+
+@keyframes home-twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes home-bob {
+  0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); }
+  50% { transform: translateY(-4px) rotate(var(--tilt, 0deg)); }
+}
+
+@keyframes home-heart-rise {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx, 0), -96px) scale(1.15); }
+}
+
+@keyframes home-glow {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+.home-twinkle { animation: home-twinkle 3s ease-in-out infinite; }
+.home-bob { transform: rotate(var(--tilt, 0deg)); animation: home-bob 4.2s ease-in-out infinite; }
+.home-heart-rise { animation: home-heart-rise 900ms ease-out forwards; }
+.home-glow { animation: home-glow 3.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .home-twinkle,
+  .home-bob,
+  .home-heart-rise,
+  .home-glow {
+    animation: none;
+  }
+}

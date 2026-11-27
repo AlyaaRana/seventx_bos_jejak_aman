@@ -15,7 +15,6 @@ interface ComfortBannerProps {
   children: React.ReactNode;
 }
 
-/** Pesan menenangkan yang "diucapkan" oleh maskot kecil. */
 export const ComfortBanner: React.FC<ComfortBannerProps> = ({ tone = 'emerald', children }) => {
   const { wrap, text } = TONES[tone];
 

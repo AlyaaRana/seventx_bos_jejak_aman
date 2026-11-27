@@ -3,29 +3,29 @@ import { useVaultStore } from '../../store/useVaultStore';
 import { MobileContainer } from '../../components/layout/MobileContainer';
 import { QuickExitFAB } from '../../components/shared/QuickExitFAB';
 import { BottomNavbar } from '../../components/shared/BottomNavbar';
-import { useHeartBurst } from '../../hooks/useHeartBurst';
 import '../../styles/cute-animations.css';
+import '../../styles/home-motion.css';
 
 import { HUG_REPLIES, MOODS, NEUTRAL_MESSAGE, SOOTHING_QUOTES } from './home/constants';
 import { useAmbientSound } from './home/hooks/useAmbientSound';
 import { useCalmGarden } from './home/hooks/useCalmGarden';
+import { useHugBurst } from './home/hooks/useHugBurst';
 import type { Mood } from './home/types';
 import { toEvidencePreviews } from './home/utils';
 import { vaultApi } from './vaultApi';
 
 import { ActionGrid } from './home/components/ActionGrid';
-import { AmbientBackdrop } from './home/components/AmbientBackdrop';
+import { ActivityStrip } from './home/components/ActivityStrip';
 import { AmbientSoundBar } from './home/components/AmbientSoundBar';
 import { BreathingModal } from './home/components/BreathingModal';
 import { CallConfirmModal } from './home/components/CallConfirmModal';
 import { CalmGarden } from './home/components/CalmGarden';
 import { CalmSpace } from './home/components/CalmSpace';
 import { EvidenceTimeline } from './home/components/EvidenceTimeline';
-import { GreetingHeader } from './home/components/GreetingHeader';
-import { MascotCard } from './home/components/MascotCard';
+import { HeroCard } from './home/components/HeroCard';
+import { HomeHeader } from './home/components/HomeHeader';
 import { MoodSupport } from './home/components/MoodSupport';
 import { QuoteModal } from './home/components/QuoteModal';
-import { VaultStatusCard } from './home/components/VaultStatusCard';
 
 type ActiveModal = 'quote' | 'breathing' | 'call' | null;
 
@@ -42,7 +42,7 @@ export const VaultHome: React.FC = () => {
 
   const { sound, pending, select, confirm, cancel } = useAmbientSound();
   const { blooms, plant } = useCalmGarden();
-  const { particles, burst } = useHeartBurst();
+  const { hearts, burst } = useHugBurst();
 
   useEffect(() => {
     let isActive = true;
@@ -84,19 +84,27 @@ export const VaultHome: React.FC = () => {
   const message = reply ?? (mood ? MOODS[mood].message : NEUTRAL_MESSAGE);
 
   return (
-    <MobileContainer className="relative flex min-h-screen flex-col justify-between overflow-hidden bg-gradient-to-b from-[#F7F5FF] via-[#F3F6FF] to-[#FFF7F8] font-sans text-slate-800">
+    <MobileContainer className="relative flex h-[100dvh] flex-col overflow-hidden bg-[#F5F0E6] font-sans text-[#2A2438]">
       <QuickExitFAB />
-      <AmbientBackdrop mood={mood} />
-      <GreetingHeader />
 
-      <main className="relative z-10 flex-1 space-y-3.5 overflow-y-auto px-5 pb-4 pt-1">
-        <MascotCard
+      <main className="relative z-10 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 pb-10 pt-5">
+        <HomeHeader />
+
+        <ActivityStrip
+          evidenceCount={evidence.length}
+          onOpenHistory={() => setScreen('s08-evidence-history')}
+          onOpenQueue={() => setScreen('s07-offline-queue')}
+        />
+
+        <HeroCard
           mood={mood}
           message={message}
-          particles={particles}
+          hearts={hearts}
           onMoodChange={handleMoodChange}
           onHug={handleHug}
+          onOpenBreathing={() => setModal('breathing')}
           onOpenQuote={() => setModal('quote')}
+          onCall={() => setModal('call')}
         />
 
         <MoodSupport
@@ -106,15 +114,13 @@ export const VaultHome: React.FC = () => {
           onCall={() => setModal('call')}
         />
 
-        {evidenceError && <p role="alert" className="text-center text-xs font-semibold text-rose-700">{evidenceError}</p>}
+        {evidenceError && (
+          <p role="alert" className="text-center text-xs font-semibold text-rose-700">
+            {evidenceError}
+          </p>
+        )}
 
         <ActionGrid onNavigate={setScreen} />
-
-        <VaultStatusCard
-          evidenceCount={evidence.length}
-          onOpenQueue={() => setScreen('s07-offline-queue')}
-          onOpenBreathing={() => setModal('breathing')}
-        />
 
         <EvidenceTimeline items={evidence} onOpenHistory={() => setScreen('s08-evidence-history')} />
 
